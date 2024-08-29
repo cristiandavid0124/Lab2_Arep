@@ -85,6 +85,26 @@ This project implements a web framework that enhances a basic web server to hand
 
 ## Tests
 
+-Runing Tests
+
+![alt text](img/image-1.png)
+
+-deploiment test
+
+![alt text](img/image-2.png)
+
+
+![alt text](img/image-3.png)
+
+
+![alt text](img/image-4.png)
+
+
+![alt text](img/image-5.png)
+
+
+
+
 
 
    
