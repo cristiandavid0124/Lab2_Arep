@@ -59,6 +59,7 @@ This project implements a web framework that enhances a basic web server to hand
 ## Architecture
 
 ### Project Tree
+```
 .
 +---src
 |   +---main
@@ -81,6 +82,8 @@ This project implements a web framework that enhances a basic web server to hand
 |           \---com
 |               \---miempresa
 |                       AppTest.java
+
+```
 
 
 ## Tests
