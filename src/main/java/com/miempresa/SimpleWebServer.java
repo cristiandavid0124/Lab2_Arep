@@ -1,157 +1,93 @@
 package com.miempresa;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
-
 
 public class SimpleWebServer {
-
+    private static SimpleWebServer instance;
     private static final int PORT = 8080;
-    private static String WEB_ROOT = "src/webroot";
-    private static final Map<String, Service> services = new HashMap<>();
 
+    private SimpleWebServer() {}
 
-    public static void main(String[] args) {
-        staticfiles("webroot");
-        get("/pi", (req, res) -> String.valueOf(Math.PI));
-        get("/hello", (req, res) -> "Hello " + req.getValue("name"));
-        get("/suma", (req, res) -> {
-            String num1 = req.getValue("num1");
-            String num2 = req.getValue("num2");
+    public static SimpleWebServer getInstance() {
+        if (instance == null) {
+            instance = new SimpleWebServer();
+        }
+        return instance;
+    }
 
-            if (num1 != null && num2 != null) {
-                try {
-                    int n1 = Integer.parseInt(num1);
-                    int n2 = Integer.parseInt(num2);
-                    return String.valueOf(n1 + n2);
-                } catch (NumberFormatException e) {
-                    return "Parámetros inválidos";
-                }
-            }
-            return "Faltan Parámetros";
-        });
-
+    public void Start() {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Servidor escuchando en el puerto " + PORT);
-
+            System.out.println("Listening on port " + PORT);
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                new Thread(new ClientHandler(clientSocket)).start();
+                try (Socket clientSocket = serverSocket.accept()) {
+                    processClientRequest(clientSocket);
+                }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("Could not listen on port " + PORT);
         }
     }
 
+    private void processClientRequest(Socket clientSocket) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        OutputStream writer = clientSocket.getOutputStream();
+        String requestLine = reader.readLine();
+        if (requestLine != null) {
+            String[] requestParts = requestLine.split(" ");
+            String requestedPath = requestParts[1];
 
-    public static void get(String path, Service action) {
-        services.put(path, action);
-    }
-
-   
-    public static void staticfiles(String folder) {
-        WEB_ROOT = "target/classes/" + folder;
-        Path path = Paths.get(WEB_ROOT);
-
-        // Verifica si el directorio existe, si no, lo crea
-        if (!Files.exists(path)) {
-            try {
-                Files.createDirectories(path);
-                System.out.println("Directorio creado: " + WEB_ROOT);
-            } catch (IOException e) {
-                System.err.println("Error al crear el directorio: " + WEB_ROOT);
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println("Usando el directorio existente: " + WEB_ROOT);
-        }
-    }
-
-   
-    private static class ClientHandler implements Runnable {
-        private final Socket clientSocket;
-
-        public ClientHandler(Socket clientSocket) {
-            this.clientSocket = clientSocket;
-        }
-
-        @Override
-        public void run() {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                 OutputStream out = clientSocket.getOutputStream()) {
-
-                String requestLine = in.readLine();
-                if (requestLine == null) return;
-
-                String[] tokens = requestLine.split(" ");
-                if (tokens.length < 3) return;
-
-                String method = tokens[0];
-                String requestedResource = tokens[1];
-                String[] parts = requestedResource.split("\\?");
-                String basePath = parts[0];
-
-                if (basePath.startsWith("/")) {
-                    basePath = basePath.substring(1);
-                }
-
-                if (basePath.startsWith("api/")) {
-                    if (services.containsKey(basePath)) {
-                        Request req = new Request(parts.length > 1 ? parts[1] : "");
-                        Response res = new Response(out);
-                        res.setCodeResponse("200 OK");
-                        String response = services.get(basePath).getValue(req, res);
-                        sendResponse(out, response, res);
-                    } else {
-                        send404(out);
-                    }
-                } else {
-                    serveStaticFile(requestedResource, out);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
-        private void sendResponse(OutputStream out, String response, Response res) throws IOException {
-            String httpResponse = "HTTP/1.1 " + res.getCodeResponse() + "\r\n" +
-                    "Content-Type: " + res.getContentType() + "\r\n" +
-                    "Content-Length: " + response.length() + "\r\n" +
-                    "\r\n" +
-                    response;
-            out.write(httpResponse.getBytes());
-            out.flush();
-        }
-
-        private void serveStaticFile(String resource, OutputStream out) throws IOException {
-            Path filePath = Paths.get(WEB_ROOT, resource);
-            if (Files.exists(filePath) && !Files.isDirectory(filePath)) {
-                // Detectar el tipo MIME
-                String contentType = Files.probeContentType(filePath);
-                byte[] fileContent = Files.readAllBytes(filePath);
-                // Crear el encabezado de la respuesta HTTP
-                String responseHeader = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: " + contentType + "\r\n" +
-                        "Content-Length: " + fileContent.length + "\r\n" +
-                        "\r\n";
-                out.write(responseHeader.getBytes());
-                out.write(fileContent);
+            if (requestedPath.startsWith("/App/")) {
+                handleServiceRequest(requestedPath, writer);
             } else {
-                send404(out);
+                handleStaticFileRequest(requestedPath, writer);
             }
         }
+    }
 
-        private void send404(OutputStream out) throws IOException {
-            String response = "HTTP/1.1 404 Not Found\r\n" +
-                    "Content-Type: application/json\r\n" +
-                    "\r\n" +
-                    "{\"error\": \"Not Found\"}";
-            out.write(response.getBytes());
+    private void handleServiceRequest(String path, OutputStream output) throws IOException {
+        String[] pathComponents = path.split("\\?");
+        String servicePath = pathComponents[0];
+        String query = pathComponents.length > 1 ? pathComponents[1] : "";
+
+        Service service = App.getServices().get(servicePath);
+        if (service != null) {
+            Request request = new Request(query);
+            Response response = new Response();
+            String result = service.getValue(request, response);
+            sendResponse(output, "200 OK", "text/plain", result);
+        } else {
+            sendResponse(output, "404 Not Found", "text/plain", "Service not found");
         }
+    }
+
+    private void handleStaticFileRequest(String path, OutputStream output) throws IOException {
+        // Si la ruta es "/", redirigir a "/index.html"
+        if ("/".equals(path)) {
+            path = "/index.html";
+        }
+    
+        String fullPath = App.getStaticFilesLocation() + path;
+        File file = new File(fullPath);
+        System.out.println("Trying to serve file: " + file.getAbsolutePath()); // Log for debugging
+        if (file.exists() && !file.isDirectory()) {
+            String contentType = Files.probeContentType(Paths.get(file.getAbsolutePath()));
+            byte[] fileContent = Files.readAllBytes(file.toPath());
+            sendResponse(output, "200 OK", contentType, new String(fileContent));
+        } else {
+            System.out.println("File not found: " + file.getAbsolutePath()); // Log for debugging
+            sendResponse(output, "404 Not Found", "text/plain", "File not found");
+        }
+    }
+
+    private void sendResponse(OutputStream output, String status, String contentType, String body) throws IOException {
+        PrintWriter writer = new PrintWriter(output, true);
+        writer.println("HTTP/1.1 " + status);
+        writer.println("Content-Type: " + contentType);
+        writer.println();
+        writer.println(body);
     }
 }

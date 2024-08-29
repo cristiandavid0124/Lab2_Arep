@@ -4,22 +4,28 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Request {
-    private final Map<String, String> queryParams;
+    private Map<String, String> queryParams;
 
     public Request(String queryString) {
-        queryParams = new HashMap<>();
-        if (queryString != null && !queryString.isEmpty()) {
-            String[] params = queryString.split("&");
-            for (String param : params) {
-                String[] keyValue = param.split("=");
+        queryParams = QueryString(queryString);
+    }
+
+    public String getValues(String key) {
+        return queryParams.get(key);
+    }
+
+    private Map<String, String> QueryString(String query) {
+        Map<String, String> parameters = new HashMap<>();
+        if (query != null && !query.isEmpty()) {
+            String[] keyValuePairs = query.split("&");
+            for (String keyValuePair : keyValuePairs) {
+                String[] keyValue = keyValuePair.split("=");
                 if (keyValue.length == 2) {
-                    queryParams.put(keyValue[0], keyValue[1]);
+                    parameters.put(keyValue[0], keyValue[1]);
                 }
             }
         }
+        return parameters;
     }
-
-    public String getValue(String key) {
-        return queryParams.get(key);
-    }
+    
 }
