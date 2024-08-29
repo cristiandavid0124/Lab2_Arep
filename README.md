@@ -8,8 +8,7 @@ This project implements a web framework that enhances a basic web server to hand
 
 1. **Clone the Repository**:
    ```bash
-   git clone [https://github.com/bricenojuliana/AREP-lab2-Microframeworks-WEB.git](https://github.com/cristiandavid0124/Lab2_Arep.git]
-   cd AREP-lab2-Microframeworks-WEB
+   git clone [https://github.com/cristiandavid0124/Lab2_Arep.git]
    ```
 
 2. **Build the Project**:
